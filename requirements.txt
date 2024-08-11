@@ -1,0 +1,5 @@
+Flask
+Werkzeug
+openai
+numpy
+scikit-learn
