@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADHD Python Idea Analyzer 2.0</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            width: calc(50% - 10px);
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        #upload-area {
+            border: 2px dashed #3498db;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: #ecf0f1;
+            transition: background-color 0.3s ease;
+        }
+        #upload-area:hover {
+            background-color: #d6eaf8;
+        }
+        #loading {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #file-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        #file-list li {
+            background-color: #e8f4fd;
+            margin-bottom: 5px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        #llm-output {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        #similar-files {
+            margin-top: 20px;
+        }
+        #similar-files ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        #similar-files li {
+            background-color: #e8f4fd;
+            margin-bottom: 5px;
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    <h1>ADHD Python Idea Analyzer and helper 2.0</h1>
+    
+    <div id="upload-area">
+        <input type="file" id="file-input" multiple accept=".py">
+        <p>Choose Python Files or Drag & Drop Here</p>
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Analyzing your Python files...</p>
+    </div>
+
+    <div class="container">
+        <div id="analysis-results" class="card">
+            <h2>Analysis Results</h2>
+            <h3>Uploaded Files:</h3>
+            <ul id="file-list"></ul>
+            <h3>Your Python Focus Areas:</h3>
+            <canvas id="radar-chart"></canvas>
+            <div id="focus-description"></div>
+        </div>
+
+        <div id="llm-analysis" class="card">
+            <h2>AI-Powered Insights</h2>
+            <div id="llm-output"></div>
+        </div>
+
+        <div id="similar-files" class="card">
+            <h2>Similar Files</h2>
+            <ul id="similar-files-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const uploadArea = document.getElementById('upload-area');
+        const loading = document.getElementById('loading');
+        const analysisResults = document.getElementById('analysis-results');
+        const llmAnalysis = document.getElementById('llm-analysis');
+        const fileList = document.getElementById('file-list');
+        const focusDescription = document.getElementById('focus-description');
+        const llmOutput = document.getElementById('llm-output');
+        const similarFilesList = document.getElementById('similar-files-list');
+        let radarChart = null;
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#d6eaf8';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.backgroundColor = '#ecf0f1';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#ecf0f1';
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleFiles(files) {
+            if (files.length === 0) return;
+
+            loading.style.display = 'block';
+            uploadArea.style.display = 'none';
+            fileList.innerHTML = '';
+            focusDescription.innerHTML = '';
+            llmOutput.innerHTML = '';
+            similarFilesList.innerHTML = '';
+
+            const formData = new FormData();
+            Array.from(files).forEach(file => {
+                formData.append('files', file);
+                const li = document.createElement('li');
+                li.textContent = file.name;
+                fileList.appendChild(li);
+            });
+
+            fetch('/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResults(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred during analysis. Please try again.');
+            })
+            .finally(() => {
+                loading.style.display = 'none';
+                anime({
+                    targets: '.card',
+                    opacity: 1,
+                    translateY: 0,
+                    delay: anime.stagger(100),
+                    easing: 'easeOutQuad'
+                });
+            });
+        }
+
+        function displayResults(data) {
+            generateRadarChart(data.focus_areas);
+            updateFocusDescription(data.focus_areas);
+            llmOutput.innerHTML = data.llm_insights;
+            displaySimilarFiles(data.similar_files);
+        }
+
+        function generateRadarChart(focusAreas) {
+            const ctx = document.getElementById('radar-chart').getContext('2d');
+            if (radarChart) radarChart.destroy();
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: Object.keys(focusAreas),
+                    datasets: [{
+                        label: 'Focus Areas',
+                        data: Object.values(focusAreas),
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgb(54, 162, 235)',
+                        pointBackgroundColor: 'rgb(54, 162, 235)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(54, 162, 235)'
+                    }]
+                },
+                options: {
+                    elements: {
+                        line: {
+                            borderWidth: 3
+                        }
+                    },
+                    scales: {
+                        r: {
+                            angleLines: {
+                                display: false
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateFocusDescription(focusAreas) {
+            const topFocus = Object.entries(focusAreas).reduce((a, b) => a[1] > b[1] ? a : b)[0];
+            focusDescription.innerHTML = `<p>Your main focus area appears to be <strong>${topFocus}</strong>.</p>`;
+        }
+
+        function displaySimilarFiles(similarFiles) {
+            similarFiles.forEach(file => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span>${file.filename}</span>
+                    <span>Similarity: ${(file.similarity * 100).toFixed(2)}%</span>
+                `;
+                similarFilesList.appendChild(li);
+            });
+        }
+
+        // Initial animation
+        anime({
+            targets: '.card',
+            opacity: 1,
+            translateY: 0,
+            delay: anime.stagger(100),
+            easing: 'easeOutQuad'
+        });
+    </script>
+</body>
+</html>
